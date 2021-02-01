@@ -4,6 +4,7 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+    
 }
 
 a {
@@ -13,4 +14,19 @@ a {
 
 * {
   box-sizing: border-box;
+}
+
+
+#tooltip{
+  z-index: 99999;
+}
+.tooltip{
+  padding: 1em;
+  position: absolute;
+  background: purple;
+  color:white;
+  top:-10px;
+  left:50%;
+z-index: inherit;
+box-shadow: 4px 4px 24px rgba(0, 0, 0, 0.3);
 }

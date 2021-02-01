@@ -1,29 +1,26 @@
 
-# What this is all about !?
 
-I'll be creating  small tutorials about various [Next.js](https://nextjs.org/) topics like pwa , portals etc.. so this repo will serve as the codebase . I'll create seperate branches for each tutorial so that you can check the final code !
+![ Thumbnail](./thumbnail.png)
+## This is a  small tutorial on creating portals with [Next.js](https://nextjs.org/), so this repo will serve as the codebase. [Watch the video ](https://youtu.be/xaiE_K32gBE)!!
+
+
+---
 
 ## Getting Started
 
-First, run the development server:
+1. Create a `_document.js` in pages directory
+2. Import and create a  new component which extends `Document`  then render the necessary stuff
+3. Then below `Main` and  above `Nextscript` create a custom div with id
+4. Then create a custom  component and then `createPortal` with   children elements and `DOM Node`    if the component is mounted
+5. Then render this custom component in the desired pages in desired way ✌
 
-```bash
-npm run dev
-# or
-yarn dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
-
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
-
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
-
+---
 ## Learn More
 
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+
+Read the article about Tooltip: https://blog.logrocket.com/learn-react-portals-by-example/
+
+Check the code sandbox : https://codesandbox.io/s/github/supromikali/react-portals-example?file=/src/TooltipPopover.js
 
 
 

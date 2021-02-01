@@ -1,7 +1,17 @@
 import Head from 'next/head'
 import styles from '../styles/Home.module.css'
+import ToolTip from '../components/ToolTip'
+import { useEffect, useRef, useState } from 'react'
 
 export default function Home() {
+  const ref=useRef(null)
+  const [show,setShow]=useState(false)
+  const [coord,setCoord]=useState({left:0,top:0})
+  useEffect(()=>{
+    let rect=ref.current.getBoundingClientRect()
+    setCoord({left: rect.x + rect.width / 2,  top: rect.top - rect.height})
+  },[])
+  
   return (
     <div className={styles.container}>
       <Head>
@@ -14,8 +24,14 @@ export default function Home() {
           Welcome to <a href="https://nextjs.org">Next.js!</a>
         </h1>
 
-        <p className={styles.description}>
+        <p onClick={()=>{setShow(!show)}}  ref={ref} className={styles.description}>
           Get started by editing{' '}
+          {show &&
+          <ToolTip selector="#tooltip">
+          <a className="tooltip"  style={{...coord}}>
+            this is a tooltip
+          </a>
+          </ToolTip>}
           <code className={styles.code}>pages/index.js</code>
         </p>
 
@@ -49,6 +65,8 @@ export default function Home() {
           </a>
         </div>
       </main>
+
+     
 
       <footer className={styles.footer}>
         <a
