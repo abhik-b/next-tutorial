@@ -3,6 +3,12 @@
 
 I'll be creating  small tutorials about various [Next.js](https://nextjs.org/) topics like pwa , portals etc.. so this repo will serve as the codebase . I'll create seperate branches for each tutorial so that you can check the final code !
 
+## Check these on my channel [abhik B](https://www.youtube.com/channel/UC74BFCI_FbThOjUqx6gmccg/videos):
+
+PWA with NextJS : https://youtu.be/8enp-acPbRE
+React Portal with NextJS : https://youtu.be/xaiE_K32gBE
+
+
 ## Getting Started
 
 First, run the development server:
