@@ -99,7 +99,7 @@
 
 // @ts-ignore
 try {
-    self['workbox:expiration:6.1.0'] && _();
+    self['workbox:expiration:6.1.5'] && _();
 }
 catch (e) { }
 
@@ -113,7 +113,7 @@ catch (e) { }
 
 // @ts-ignore
 try {
-    self['workbox:routing:6.1.0'] && _();
+    self['workbox:routing:6.1.5'] && _();
 }
 catch (e) { }
 
@@ -127,7 +127,7 @@ catch (e) { }
 
 // @ts-ignore
 try {
-    self['workbox:core:6.1.0'] && _();
+    self['workbox:core:6.1.5'] && _();
 }
 catch (e) { }
 
@@ -2048,8 +2048,8 @@ class StrategyHandler_StrategyHandler {
     }
     /**
      * Fetches a given request (and invokes any applicable plugin callback
-     * methods) using the `fetchOptions` and `plugins` defined on the strategy
-     * object.
+     * methods) using the `fetchOptions` (for non-navigation requests) and
+     * `plugins` defined on the `Strategy` object.
      *
      * The following plugin lifecycle methods are invoked when using this method:
      * - `requestWillFetch()`
@@ -2059,68 +2059,66 @@ class StrategyHandler_StrategyHandler {
      * @param {Request|string} input The URL or request to fetch.
      * @return {Promise<Response>}
      */
-    fetch(input) {
-        return this.waitUntil((async () => {
-            const { event } = this;
-            let request = toRequest(input);
-            if (request.mode === 'navigate' &&
-                event instanceof FetchEvent &&
-                event.preloadResponse) {
-                const possiblePreloadResponse = await event.preloadResponse;
-                if (possiblePreloadResponse) {
-                    if (false) {}
-                    return possiblePreloadResponse;
-                }
+    async fetch(input) {
+        const { event } = this;
+        let request = toRequest(input);
+        if (request.mode === 'navigate' &&
+            event instanceof FetchEvent &&
+            event.preloadResponse) {
+            const possiblePreloadResponse = await event.preloadResponse;
+            if (possiblePreloadResponse) {
+                if (false) {}
+                return possiblePreloadResponse;
             }
-            // If there is a fetchDidFail plugin, we need to save a clone of the
-            // original request before it's either modified by a requestWillFetch
-            // plugin or before the original request's body is consumed via fetch().
-            const originalRequest = this.hasCallback('fetchDidFail') ?
-                request.clone() : null;
-            try {
-                for (const cb of this.iterateCallbacks('requestWillFetch')) {
-                    request = await cb({ request: request.clone(), event });
-                }
+        }
+        // If there is a fetchDidFail plugin, we need to save a clone of the
+        // original request before it's either modified by a requestWillFetch
+        // plugin or before the original request's body is consumed via fetch().
+        const originalRequest = this.hasCallback('fetchDidFail') ?
+            request.clone() : null;
+        try {
+            for (const cb of this.iterateCallbacks('requestWillFetch')) {
+                request = await cb({ request: request.clone(), event });
             }
-            catch (err) {
-                throw new WorkboxError_WorkboxError('plugin-error-request-will-fetch', {
-                    thrownError: err,
+        }
+        catch (err) {
+            throw new WorkboxError_WorkboxError('plugin-error-request-will-fetch', {
+                thrownError: err,
+            });
+        }
+        // The request can be altered by plugins with `requestWillFetch` making
+        // the original request (most likely from a `fetch` event) different
+        // from the Request we make. Pass both to `fetchDidFail` to aid debugging.
+        const pluginFilteredRequest = request.clone();
+        try {
+            let fetchResponse;
+            // See https://github.com/GoogleChrome/workbox/issues/1796
+            fetchResponse = await fetch(request, request.mode === 'navigate' ?
+                undefined : this._strategy.fetchOptions);
+            if (false) {}
+            for (const callback of this.iterateCallbacks('fetchDidSucceed')) {
+                fetchResponse = await callback({
+                    event,
+                    request: pluginFilteredRequest,
+                    response: fetchResponse,
                 });
             }
-            // The request can be altered by plugins with `requestWillFetch` making
-            // the original request (most likely from a `fetch` event) different
-            // from the Request we make. Pass both to `fetchDidFail` to aid debugging.
-            const pluginFilteredRequest = request.clone();
-            try {
-                let fetchResponse;
-                // See https://github.com/GoogleChrome/workbox/issues/1796
-                fetchResponse = await fetch(request, request.mode === 'navigate' ?
-                    undefined : this._strategy.fetchOptions);
-                if (false) {}
-                for (const callback of this.iterateCallbacks('fetchDidSucceed')) {
-                    fetchResponse = await callback({
-                        event,
-                        request: pluginFilteredRequest,
-                        response: fetchResponse,
-                    });
-                }
-                return fetchResponse;
+            return fetchResponse;
+        }
+        catch (error) {
+            if (false) {}
+            // `originalRequest` will only exist if a `fetchDidFail` callback
+            // is being used (see above).
+            if (originalRequest) {
+                await this.runCallbacks('fetchDidFail', {
+                    error,
+                    event,
+                    originalRequest: originalRequest.clone(),
+                    request: pluginFilteredRequest.clone(),
+                });
             }
-            catch (error) {
-                if (false) {}
-                // `originalRequest` will only exist if a `fetchDidFail` callback
-                // is being used (see above).
-                if (originalRequest) {
-                    await this.runCallbacks('fetchDidFail', {
-                        error,
-                        event,
-                        originalRequest: originalRequest.clone(),
-                        request: pluginFilteredRequest.clone(),
-                    });
-                }
-                throw error;
-            }
-        })());
+            throw error;
+        }
     }
     /**
      * Calls `this.fetch()` and (in the background) runs `this.cachePut()` on
@@ -2150,26 +2148,24 @@ class StrategyHandler_StrategyHandler {
      * @param {Request|string} key The Request or URL to use as the cache key.
      * @return {Promise<Response|undefined>} A matching response, if found.
      */
-    cacheMatch(key) {
-        return this.waitUntil((async () => {
-            const request = toRequest(key);
-            let cachedResponse;
-            const { cacheName, matchOptions } = this._strategy;
-            const effectiveRequest = await this.getCacheKey(request, 'read');
-            const multiMatchOptions = { ...matchOptions, ...{ cacheName } };
-            cachedResponse = await caches.match(effectiveRequest, multiMatchOptions);
-            if (false) {}
-            for (const callback of this.iterateCallbacks('cachedResponseWillBeUsed')) {
-                cachedResponse = (await callback({
-                    cacheName,
-                    matchOptions,
-                    cachedResponse,
-                    request: effectiveRequest,
-                    event: this.event,
-                })) || undefined;
-            }
-            return cachedResponse;
-        })());
+    async cacheMatch(key) {
+        const request = toRequest(key);
+        let cachedResponse;
+        const { cacheName, matchOptions } = this._strategy;
+        const effectiveRequest = await this.getCacheKey(request, 'read');
+        const multiMatchOptions = { ...matchOptions, ...{ cacheName } };
+        cachedResponse = await caches.match(effectiveRequest, multiMatchOptions);
+        if (false) {}
+        for (const callback of this.iterateCallbacks('cachedResponseWillBeUsed')) {
+            cachedResponse = (await callback({
+                cacheName,
+                matchOptions,
+                cachedResponse,
+                request: effectiveRequest,
+                event: this.event,
+            })) || undefined;
+        }
+        return cachedResponse;
     }
     /**
      * Puts a request/response pair in the cache (and invokes any applicable
@@ -2433,8 +2429,9 @@ class Strategy_Strategy {
      * @param {Array<Object>} [options.plugins] [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
      * to use in conjunction with this caching strategy.
      * @param {Object} [options.fetchOptions] Values passed along to the
-     * [`init`]{@link https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters}
-     * of all fetch() requests made by this strategy.
+     * [`init`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters)
+     * of [non-navigation](https://github.com/GoogleChrome/workbox/issues/1796)
+     * `fetch()` requests made by this strategy.
      * @param {Object} [options.matchOptions] The
      * [`CacheQueryOptions`]{@link https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions}
      * for any `cache.match()` or `cache.put()` calls made by this strategy.
@@ -2813,15 +2810,16 @@ const cacheOkAndOpaquePlugin = {
 class NetworkFirst_NetworkFirst extends Strategy_Strategy {
     /**
      * @param {Object} [options]
-     * @param {string} [options.cacheName Cache name to store and retrieve
+     * @param {string} [options.cacheName] Cache name to store and retrieve
      * requests. Defaults to cache names provided by
      * [workbox-core]{@link module:workbox-core.cacheNames}.
-     * @param {Array<Object>} [options.plugins [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
+     * @param {Array<Object>} [options.plugins] [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
      * to use in conjunction with this caching strategy.
-     * @param {Object} [options.fetchOptions Values passed along to the
+     * @param {Object} [options.fetchOptions] Values passed along to the
      * [`init`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters)
-     * of all fetch() requests made by this strategy.
-     * @param {Object} [options.matchOptions [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
+     * of [non-navigation](https://github.com/GoogleChrome/workbox/issues/1796)
+     * `fetch()` requests made by this strategy.
+     * @param {Object} [options.matchOptions] [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
      * @param {number} [options.networkTimeoutSeconds] If set, any network requests
      * that fail to respond within the timeout will fallback to the cache.
      *
@@ -2858,19 +2856,16 @@ class NetworkFirst_NetworkFirst extends Strategy_Strategy {
         }
         const networkPromise = this._getNetworkPromise({ timeoutId, request, logs, handler });
         promises.push(networkPromise);
-        for (const promise of promises) {
-            handler.waitUntil(promise);
-        }
-        // Promise.race() will resolve as soon as the first promise resolves.
-        let response = await Promise.race(promises);
-        // If Promise.race() resolved with null, it might be due to a network
-        // timeout + a cache miss. If that were to happen, we'd rather wait until
-        // the networkPromise resolves instead of returning null.
-        // Note that it's fine to await an already-resolved promise, so we don't
-        // have to check to see if it's still "in flight".
-        if (!response) {
-            response = await networkPromise;
-        }
+        const response = await handler.waitUntil((async () => {
+            // Promise.race() will resolve as soon as the first promise resolves.
+            return await handler.waitUntil(Promise.race(promises)) ||
+                // If Promise.race() resolved with null, it might be due to a network
+                // timeout + a cache miss. If that were to happen, we'd rather wait until
+                // the networkPromise resolves instead of returning null.
+                // Note that it's fine to await an already-resolved promise, so we don't
+                // have to check to see if it's still "in flight".
+                await networkPromise;
+        })());
         if (false) {}
         if (!response) {
             throw new WorkboxError_WorkboxError('no-response', { url: request.url });
@@ -2967,7 +2962,8 @@ class NetworkOnly_NetworkOnly extends Strategy_Strategy {
      * to use in conjunction with this caching strategy.
      * @param {Object} [options.fetchOptions] Values passed along to the
      * [`init`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters)
-     * of all fetch() requests made by this strategy.
+     * of [non-navigation](https://github.com/GoogleChrome/workbox/issues/1796)
+     * `fetch()` requests made by this strategy.
      * @param {number} [options.networkTimeoutSeconds] If set, any network requests
      * that fail to respond within the timeout will result in a network error.
      */
@@ -3048,16 +3044,17 @@ class NetworkOnly_NetworkOnly extends Strategy_Strategy {
  */
 class StaleWhileRevalidate_StaleWhileRevalidate extends Strategy_Strategy {
     /**
-     * @param {Object} options
-     * @param {string} options.cacheName Cache name to store and retrieve
+     * @param {Object} [options]
+     * @param {string} [options.cacheName] Cache name to store and retrieve
      * requests. Defaults to cache names provided by
      * [workbox-core]{@link module:workbox-core.cacheNames}.
-     * @param {Array<Object>} options.plugins [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
+     * @param {Array<Object>} [options.plugins] [Plugins]{@link https://developers.google.com/web/tools/workbox/guides/using-plugins}
      * to use in conjunction with this caching strategy.
-     * @param {Object} options.fetchOptions Values passed along to the
+     * @param {Object} [options.fetchOptions] Values passed along to the
      * [`init`](https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/fetch#Parameters)
-     * of all fetch() requests made by this strategy.
-     * @param {Object} options.matchOptions [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
+     * of [non-navigation](https://github.com/GoogleChrome/workbox/issues/1796)
+     * `fetch()` requests made by this strategy.
+     * @param {Object} [options.matchOptions] [`CacheQueryOptions`](https://w3c.github.io/ServiceWorker/#dictdef-cachequeryoptions)
      */
     constructor(options) {
         super(options);
@@ -3589,6 +3586,8 @@ class Router_Router {
      *
      * @param {Object} options
      * @param {URL} options.url
+     * @param {boolean} options.sameOrigin The result of comparing `url.origin`
+     *     against the current origin.
      * @param {Request} options.request The request to match.
      * @param {Event} options.event The corresponding event.
      * @return {Object} An object with `route` and `params` properties.
@@ -4395,8 +4394,7 @@ class PrecacheController_PrecacheController {
      * Note: this method calls `event.waitUntil()` for you, so you do not need
      * to call it yourself in your event handlers.
      *
-     * @param {Object} options
-     * @param {Event} options.event The install event.
+     * @param {ExtendableEvent} event
      * @return {Promise<module:workbox-precaching.InstallResult>}
      */
     install(event) {
@@ -4431,7 +4429,7 @@ class PrecacheController_PrecacheController {
      * Note: this method calls `event.waitUntil()` for you, so you do not need
      * to call it yourself in your event handlers.
      *
-     * @param {ExtendableEvent}
+     * @param {ExtendableEvent} event
      * @return {Promise<module:workbox-precaching.CleanupResult>}
      */
     activate(event) {
@@ -5070,7 +5068,7 @@ skipWaiting();
 clientsClaim(); // must include following lines when using inject manifest module from workbox
 // https://developers.google.com/web/tools/workbox/guides/precache-files/workbox-build#add_an_injection_point
 
-var WB_MANIFEST = [{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/4361e7c88df647c8e5b63c9ca2d0a00f01d4f466.d4f57090bd55662b89aa.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/c3e90ca6be9a08f0f03b075a7b753d43038e291c.e24d3794cd552d26d90f.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/framework.abffcf18e526b7c0dbcd.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/main-9080369034e11d1c9bbf.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/pages/%5Bid%5D-ca412e38a97bf79303d8.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/pages/_app-5f86dc42269766cfa8cd.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/pages/_error-2157553d569a4a4e7bf2.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/pages/fallback-7cf060079f7a9c2e4ed9.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/pages/index-5f67ee54b199c0095ea4.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/polyfills-250f16924c392849df26.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/chunks/webpack-50bee04d1dc61f8adf5b.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/css/9e556c7b5ad95f54eae0.css'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/xRyks8WPdc_7Fqxd3HUJr/_buildManifest.js'},{'revision':'xRyks8WPdc_7Fqxd3HUJr','url':'/_next/static/xRyks8WPdc_7Fqxd3HUJr/_ssgManifest.js'},{'revision':'21b739d43fcb9bbb83d8541fe4fe88fa','url':'/favicon.ico'},{'revision':'1715680c81be4002ee18c3458a98ba78','url':'/icon-512x512.png'},{'revision':'7b0bd67f4124b377026ad0522fa7649d','url':'/icon.png'},{'revision':'9e2c4b474834b64a273a5947e2954c8f','url':'/manifest.json'},{'revision':'4b4f1876502eb6721764637fe5c41702','url':'/vercel.svg'}]; // Precache fallback route and image
+var WB_MANIFEST = [{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/XqnQis_M5nopgmlKXkZ3e/_buildManifest.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/XqnQis_M5nopgmlKXkZ3e/_ssgManifest.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/4361e7c88df647c8e5b63c9ca2d0a00f01d4f466.d4f57090bd55662b89aa.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/c3e90ca6be9a08f0f03b075a7b753d43038e291c.e24d3794cd552d26d90f.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/framework.abffcf18e526b7c0dbcd.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/main-facb4384672912b9f73b.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/pages/%5Bid%5D-ca412e38a97bf79303d8.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/pages/_app-4f5c68b54e255aa516ee.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/pages/_error-2157553d569a4a4e7bf2.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/pages/fallback-7cf060079f7a9c2e4ed9.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/pages/index-5f67ee54b199c0095ea4.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/polyfills-250f16924c392849df26.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/chunks/webpack-50bee04d1dc61f8adf5b.js'},{'revision':'XqnQis_M5nopgmlKXkZ3e','url':'/_next/static/css/1cb12bb5f2043f3e5694.css'},{'revision':'21b739d43fcb9bbb83d8541fe4fe88fa','url':'/favicon.ico'},{'revision':'1715680c81be4002ee18c3458a98ba78','url':'/icon-512x512.png'},{'revision':'7b0bd67f4124b377026ad0522fa7649d','url':'/icon.png'},{'revision':'9e2c4b474834b64a273a5947e2954c8f','url':'/manifest.json'},{'revision':'4b4f1876502eb6721764637fe5c41702','url':'/vercel.svg'}]; // Precache fallback route and image
 
 WB_MANIFEST.push({
   url: "/fallback",
@@ -5161,7 +5159,6 @@ setDefaultHandler(new StaleWhileRevalidate_StaleWhileRevalidate()); // This "cat
 
 setCatchHandler(function (_ref) {
   var event = _ref.event;
-
   // The FALLBACK_URL entries must be added to the cache ahead of time, either
   // via runtime or precaching. If they are precached, then call
   // `matchPrecache(FALLBACK_URL)` (from the `workbox-precaching` package)
@@ -5170,6 +5167,8 @@ setCatchHandler(function (_ref) {
   // Use event, request, and url to figure out how to respond.
   // One approach would be to use request.destination, see
   // https://medium.com/dev-channel/service-worker-caching-strategies-based-on-request-types-57411dd7652c
+  if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
+
   switch (event.request.destination) {
     case "document":
       // If using precached URLs:
@@ -5179,7 +5178,7 @@ setCatchHandler(function (_ref) {
 
     case "image":
       // If using precached URLs:
-      return matchPrecache("/icon.png"); // return caches.match('/static/images/fallback.png')
+      return matchPrecache("/static/images/fallback.png"); // return caches.match('/static/images/fallback.png')
 
       break;
 
@@ -5203,7 +5202,7 @@ setCatchHandler(function (_ref) {
 
 // @ts-ignore
 try {
-    self['workbox:strategies:6.1.0'] && _();
+    self['workbox:strategies:6.1.5'] && _();
 }
 catch (e) { }
 
@@ -5217,7 +5216,7 @@ catch (e) { }
 
 // @ts-ignore
 try {
-    self['workbox:precaching:6.1.0'] && _();
+    self['workbox:precaching:6.1.5'] && _();
 }
 catch (e) { }
 

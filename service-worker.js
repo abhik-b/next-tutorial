@@ -178,6 +178,12 @@ setCatchHandler(({ event }) => {
   // Use event, request, and url to figure out how to respond.
   // One approach would be to use request.destination, see
   // https://medium.com/dev-channel/service-worker-caching-strategies-based-on-request-types-57411dd7652c
+
+  if (
+    event.request.cache === "only-if-cached" &&
+    event.request.mode !== "same-origin"
+  )
+    return;
   switch (event.request.destination) {
     case "document":
       // If using precached URLs:
